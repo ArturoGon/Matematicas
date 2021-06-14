@@ -1,0 +1,470 @@
+---
+title: "CRIPTOMONEDAS"
+author: "Arturo González, Itria Macaró, Jun De Wu"
+date: "31/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(reshape)
+library(xts)
+library(reshape2)
+library(zoo)
+library(tidyverse)
+library(forecast)
+```
+
+```{r}
+cripto <- read_csv("consolidated_coin_data.csv")
+view(cripto)
+
+#Top 5 criptomonedas segun internet y que estan en nuestro data frame (Bitcoin, Ripple, Litecoin, Ethereum, bitcoin-cash)
+
+real_cripto=filter(cripto, Currency %in% c("ripple","bitcoin","litecoin","ethereum","bitcoin-cash"))
+real_cripto <- real_cripto %>%
+  transmute(Currency,
+            Date= mdy(real_cripto$Date),
+            Open,
+            High,
+            Low,
+            Close,
+            Volume,
+            `Market Cap`)
+
+
+```
+
+
+```{r}
+filter(real_cripto,Currency == "ripple") %>%
+  ggplot(mapping = aes(x=Date,y=Low))+
+  geom_point(alpha=0.2)
+
+real_cripto %>%
+  filter(Currency %in% c("ripple","litecoin","ethereum")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Low, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+
+cripto_medias <- real_cripto %>%
+  mutate(Mean= (Low+High)/2,
+         Days=wday(real_cripto$Date),
+         Coin_moved= Volume/Close)
+
+view(cripto_medias)
+
+real_cripto %>%
+  mutate(Mean= (Low+High)/2) %>%
+  filter(Currency %in% c("ripple","litecoin","ethereum")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Mean, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+```
+
+```{r}
+cripto_medias %>%
+  filter(Currency %in% c("ripple","litecoin","ethereum")) %>%
+  group_by(Currency,Days) %>%
+  ggplot(mapping = aes(x=Date,y=Mean, colour=Currency))+
+  geom_point(alpha=0.2)+
+  facet_wrap(~Days,nrow=3)
+  geom_line()
+
+cripto_medias %>%
+  filter(Currency %in% c("ripple","bitcoin","litecoin","ethereum","bitcoin-cash")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Volume,color=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+cripto_medias %>%
+  filter(Currency =="ripple") %>%
+  ggplot(mapping = aes(x=Days,y=Close))+
+  geom_boxplot()
+
+
+```
+##Ripple
+```{r}
+ripple <- filter(cripto_medias, Currency== "ripple")
+x= c(replicate(0,1:length(ripple$Open)))
+for (i in  1:length(ripple$Open)){
+  x[i] <- (-ripple[i,3]+ripple[i+1,6])
+}
+cripto_ripple_total=mutate(ripple,Diff= x)
+
+cripto_ripple_close <- select(cripto_ripple_total,
+       Date,
+       Close,
+       Days) %>%
+  arrange(Date)
+
+```
+
+```{r}
+cripto_ripple_close <- select(cripto_ripple_total,
+       Date,
+       Close)
+
+alisado_simple_ripple = HoltWinters(cripto_ripple_close, beta=FALSE, gamma=FALSE)
+alisado_simple_ripple$alpha
+alisado_doble_ripple = HoltWinters(cripto_ripple_close, gamma = F)
+alisado_doble_ripple$alpha
+alisado_doble_ripple$beta
+
+
+
+#comentar las alphas y la beta del alisado simple y doble
+```
+
+```{r}
+diff_o2_ripple <- diff(cripto_ripple_close$Close, differences=2)
+
+
+acf(diff_o2_ripple,lag.max = 200)
+pacf(diff_o2_ripple,lag.max = 200)
+
+Box.test(cripto_ripple_close$Close) #p-valor<0.05 la serie presenta autocorrelation
+
+modelo2_ripple=arima(diff_o2_ripple,order = c(1,0,7)) 
+
+# autoplot(ts(cripto_ripple_close), alpha = 0.8, color = "blue") +
+#   geom_line( aes( y=arima(cripto_ripple_close$Close,order = c(1,2,7))), color = "red")
+
+pronostico_ripple = forecast(arima(cripto_ripple_close$Close,order= c(1,2,7)),h=50)
+plot(pronostico_ripple)
+```
+
+
+```{r}
+plot(modelo2_ripple$residuals)
+qqnorm(modelo2_ripple$residuals)
+qqline(modelo2_ripple$residuals,col="red")
+modelo2_ripple$coef
+```
+
+```{r}
+cripto_ripple_close1 <- filter(cripto_ripple_close, Date>="2017-05-01")
+boxplot( cripto_ripple_close1$Close ~ month(cripto_ripple_close1$Date),xlab = "Meses año", ylab = "Ripple Close")
+```
+
+
+
+
+
+
+##Bitcoin-cash
+```{r}
+bitcoin_c <- filter(cripto_medias, Currency== "bitcoin-cash")
+x= c(replicate(0,1:length(bitcoin_c$Open)))
+for (i in  1:length(bitcoin_c$Open)){
+  x[i] <- (-bitcoin_c[i,3]+bitcoin_c[i+1,6])
+}
+cripto_bitcoin_c_total=mutate(bitcoin_c,Diff= x)
+
+cripto_bitcoin_c_close <- select(cripto_bitcoin_c_total,
+       Date,
+       Close,
+       Days) %>%
+  arrange(Date)
+```
+
+```{r}
+cripto_bitcoin_c_close <- select(cripto_bitcoin_c_total,
+       Date,
+       Close)
+
+alisado_simple_bitcoin_c = HoltWinters(cripto_bitcoin_c_close, beta=FALSE, gamma=FALSE)
+alisado_simple_bitcoin_c$alpha
+alisado_doble_bitcoin_c = HoltWinters(cripto_bitcoin_c_close, gamma = F)
+alisado_doble_bitcoin_c$alpha
+alisado_doble_bitcoin_c$beta
+```
+
+```{r}
+diff_o1_bitcoin_c <- diff(cripto_bitcoin_c_close$Close, differences=1)
+
+
+acf(diff_o1_bitcoin_c,lag.max = 200)
+pacf(diff_o1_bitcoin_c,lag.max = 200)
+
+Box.test(cripto_bitcoin_c_close$Close) #p-valor<0.05 la serie presenta autocorrelation
+
+modelo1_bitcoin_c=arima(diff_o1_bitcoin_c,order = c(0,0,0)) 
+
+# autoplot(ts(cripto_ripple_close), alpha = 0.8, color = "blue") +
+#   geom_line( aes( y=arima(cripto_ripple_close$Close,order = c(1,2,7))), color = "red")
+
+pronostico_bitcoin_c = forecast(arima(cripto_bitcoin_c_close$Close,order= c(0,1,0)),h=50)
+plot(pronostico_bitcoin_c)
+```
+
+```{r}
+plot(modelo1_bitcoin_c$residuals)
+qqnorm(modelo1_bitcoin_c$residuals)
+qqline(modelo1_bitcoin_c$residuals,col="red")
+modelo1_bitcoin_c$coef
+```
+
+```{r}
+cripto_bitcoin_c_close1 <- filter(cripto_bitcoin_c_close)
+boxplot( cripto_bitcoin_c_close1$Close ~ month(cripto_bitcoin_c_close1$Date),xlab = "Meses año", ylab = "Bitcoin-cash Close")
+```
+##Bitcoin
+```{r}
+bitcoin <- filter(cripto_medias, Currency== "bitcoin")
+x= c(replicate(0,1:length(bitcoin$Open)))
+for (i in  1:length(bitcoin$Open)){
+  x[i] <- (-bitcoin[i,3]+bitcoin[i+1,6])
+}
+cripto_bitcoin_total=mutate(bitcoin,Diff= x)
+
+cripto_bitcoin_close <- select(cripto_bitcoin_total,
+       Date,
+       Close,
+       Days) %>%
+  arrange(Date)
+```
+
+```{r}
+cripto_bitcoin_close <- select(cripto_bitcoin_total,
+       Date,
+       Close)
+
+alisado_simple_bitcoin = HoltWinters(cripto_bitcoin_close, beta=FALSE, gamma=FALSE)
+alisado_simple_bitcoin$alpha
+alisado_doble_bitcoin = HoltWinters(cripto_bitcoin_close, gamma = F)
+alisado_doble_bitcoin$alpha
+alisado_doble_bitcoin$beta
+```
+
+```{r}
+diff_o1_bitcoin <- diff(cripto_bitcoin_close$Close, differences=1)
+
+
+acf(diff_o1_bitcoin,lag.max = 200)
+pacf(diff_o1_bitcoin,lag.max = 200)
+
+Box.test(cripto_bitcoin_close$Close) #p-valor<0.05 la serie presenta autocorrelation
+
+modelo1_bitcoin=arima(diff_o1_bitcoin,order = c(1,0,1)) 
+
+# autoplot(ts(cripto_ripple_close), alpha = 0.8, color = "blue") +
+#   geom_line( aes( y=arima(cripto_ripple_close$Close,order = c(1,2,7))), color = "red")
+
+pronostico_bitcoin = forecast(arima(cripto_bitcoin_close$Close,order= c(1,1,1)),h=50)
+plot(pronostico_bitcoin)
+```
+
+```{r}
+plot(modelo1_bitcoin$residuals)
+qqnorm(modelo1_bitcoin$residuals)
+qqline(modelo1_bitcoin$residuals,col="red")
+modelo1_bitcoin$coef
+```
+
+```{r}
+cripto_bitcoin_close1 <- filter(cripto_bitcoin_close, Date>="2017-05-01")
+boxplot( cripto_bitcoin_close1$Close ~ month(cripto_bitcoin_close1$Date),xlab = "Meses año", ylab = "Bitcoin Close")
+```
+
+##Ethereum
+```{r}
+ethereum <- filter(cripto_medias, Currency== "ethereum")
+x= c(replicate(0,1:length(ethereum$Open)))
+for (i in  1:length(ethereum$Open)){
+  x[i] <- (-ethereum[i,3]+ethereum[i+1,6])
+}
+cripto_ethereum_total=mutate(ethereum,Diff= x)
+
+cripto_ethereum_close <- select(cripto_ethereum_total,
+       Date,
+       Close,
+       Days) %>%
+  arrange(Date)
+```
+
+```{r}
+cripto_ethereum_close <- select(cripto_ethereum_total,
+       Date,
+       Close)
+
+alisado_simple_ethereum = HoltWinters(cripto_ethereum_close, beta=FALSE, gamma=FALSE)
+alisado_simple_ethereum$alpha
+alisado_doble_ethereum = HoltWinters(cripto_ethereum_close, gamma = F)
+alisado_doble_ethereum$alpha
+alisado_doble_ethereum$beta
+```
+
+```{r}
+diff_o1_ethereum <- diff(cripto_ethereum_close$Close, differences=1)
+
+
+acf(diff_o1_ethereum,lag.max = 200)
+pacf(diff_o1_ethereum,lag.max = 200)
+
+Box.test(cripto_ethereum_close$Close) #p-valor<0.05 la serie presenta autocorrelation
+
+modelo1_ethereum=arima(diff_o1_ethereum,order = c(0,0,0)) 
+
+# autoplot(ts(cripto_ripple_close), alpha = 0.8, color = "blue") +
+#   geom_line( aes( y=arima(cripto_ripple_close$Close,order = c(1,2,7))), color = "red")
+
+pronostico_ethereum = forecast(arima(cripto_ethereum_close$Close,order= c(0,1,0)),h=50)
+plot(pronostico_ethereum)
+```
+
+```{r}
+plot(modelo1_ethereum$residuals)
+qqnorm(modelo1_ethereum$residuals)
+qqline(modelo1_ethereum$residuals,col="red")
+modelo1_ethereum$coef
+```
+
+```{r}
+cripto_ethereum_close1 <- filter(cripto_ethereum_close, Date>="2017-05-01")
+boxplot( cripto_ethereum_close1$Close ~ month(cripto_ethereum_close1$Date),xlab = "Meses año", ylab = "Ethereum Close")
+```
+
+##Litecoin
+```{r}
+litecoin <- filter(cripto_medias, Currency== "litecoin")
+x= c(replicate(0,1:length(litecoin$Open)))
+for (i in  1:length(litecoin$Open)){
+  x[i] <- (-litecoin[i,3]+litecoin[i+1,6])
+}
+cripto_litecoin_total=mutate(litecoin,Diff= x)
+
+cripto_litecoin_close <- select(cripto_litecoin_total,
+       Date,
+       Close,
+       Days) %>%
+  arrange(Date)
+```
+
+```{r}
+cripto_litecoin_close <- select(cripto_litecoin_total,
+       Date,
+       Close)
+
+alisado_simple_litecoin = HoltWinters(cripto_litecoin_close, beta=FALSE, gamma=FALSE)
+alisado_simple_litecoin$alpha
+alisado_doble_litecoin = HoltWinters(cripto_litecoin_close, gamma = F)
+alisado_doble_litecoin$alpha
+alisado_doble_litecoin$beta
+```
+
+```{r}
+diff_o1_litecoin <- diff(cripto_litecoin_close$Close, differences=1)
+
+
+acf(diff_o1_litecoin,lag.max = 200)
+pacf(diff_o1_litecoin,lag.max = 200)
+
+Box.test(cripto_litecoin_close$Close) #p-valor<0.05 la serie presenta autocorrelation
+
+modelo1_litecoin=arima(diff_o1_litecoin,order = c(3,0,4)) 
+
+# autoplot(ts(cripto_ripple_close), alpha = 0.8, color = "blue") +
+#   geom_line( aes( y=arima(cripto_ripple_close$Close,order = c(1,2,7))), color = "red")
+
+pronostico_litecoin = forecast(arima(cripto_litecoin_close$Close,order= c(3,1,4)),h=50)
+plot(pronostico_litecoin)
+```
+
+```{r}
+plot(modelo1_litecoin$residuals)
+qqnorm(modelo1_litecoin$residuals)
+qqline(modelo1_litecoin$residuals,col="red")
+modelo1_litecoin$coef
+```
+
+```{r}
+cripto_litecoin_close1 <- filter(cripto_litecoin_close, Date>="2017-05-01")
+boxplot( cripto_litecoin_close1$Close ~ month(cripto_litecoin_close1$Date),xlab = "Meses año", ylab = "Litecoin Close")
+```
+
+```{r}
+real_cripto %>%
+  filter(Currency %in% c("ripple")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Close, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+real_cripto %>%
+  filter(Currency %in% c("bitcoin")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Close, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+real_cripto %>%
+  filter(Currency %in% c("bitcoin-cash")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Close, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+real_cripto %>%
+  filter(Currency %in% c("litecoin")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Close, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+
+real_cripto %>%
+  filter(Currency %in% c("ethereum")) %>%
+  group_by(Currency) %>%
+  ggplot(mapping = aes(x=Date,y=Close, colour=Currency))+
+  geom_point(alpha=0.2)+
+  geom_line()
+```
+
+```{r}
+par(mfrow=c(1,2))
+real_cripto %>%
+  filter(Currency =="ripple")%>%
+  ggplot(mapping = aes(x = Date, y = Close))+
+    geom_line(color = "black", size = 1, alpha = 0.7, linetype = 1)+
+    geom_line(mapping = aes(x = Date,y = Open),color="orange", size = 1, linetype = 2)
+real_cripto %>%
+  filter(Currency =="bitcoin")%>%
+  ggplot(mapping = aes(x = Date, y = Close))+
+    geom_line(color = "black", size = 1, alpha = 0.7, linetype = 1)+
+    geom_line(mapping = aes(x = Date,y = Open),color="red", size = 1, linetype = 2)
+    
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
